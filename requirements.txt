@@ -1,0 +1,23 @@
+# ── Web framework ──
+fastapi==0.115.*
+uvicorn[standard]==0.34.*
+
+# ── HTTP client ──
+httpx==0.28.*
+
+# ── Data & analysis ──
+numpy==2.1.*
+pandas==2.2.*
+
+# ── Database ──
+sqlalchemy==2.0.*
+
+# ── Configuration ──
+python-dotenv==1.1.*
+
+# ── Scheduling ──
+apscheduler==3.10.*
+
+# ── Testing ──
+pytest==8.3.*
+pytest-asyncio==0.24.*
