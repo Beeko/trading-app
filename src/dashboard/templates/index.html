@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trading Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ========================================================================
+   RESET & TOKENS
+   ======================================================================== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Warm near-black palette */
+  --bg-void:       #08070a;
+  --bg-surface:    #0f0d10;
+  --bg-panel:      #141216;
+  --bg-elevated:   #1a171c;
+  --bg-input:      #0a090b;
+
+  /* Borders — warm, very subtle */
+  --border:        rgba(232, 224, 208, 0.07);
+  --border-strong: rgba(232, 224, 208, 0.14);
+  --border-accent: rgba(201, 169, 97, 0.35);
+
+  /* Text */
+  --text:          #e8e0d0;
+  --text-dim:      #a39d90;
+  --text-muted:    #6b655c;
+  --text-faint:    #443f38;
+
+  /* Semantic colors */
+  --gold:          #c9a961;
+  --gold-bright:   #e8c874;
+  --positive:      #6a9955;
+  --positive-glow: rgba(106, 153, 85, 0.2);
+  --negative:      #d44a4a;
+  --negative-glow: rgba(212, 74, 74, 0.2);
+  --warning:       #d4a050;
+  --critical:      #ff4030;
+  --info:          #6b9bcf;
+
+  /* Typography */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans:    'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* Spacing scale */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+}
+
+/* ========================================================================
+   BASE
+   ======================================================================== */
+html, body {
+  height: 100%;
+  background: var(--bg-void);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-image:
+    radial-gradient(ellipse at top left, rgba(201, 169, 97, 0.04), transparent 55%),
+    radial-gradient(ellipse at bottom right, rgba(107, 155, 207, 0.03), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.005) 0%, transparent 100%);
+  background-attachment: fixed;
+}
+
+/* Faint grid overlay — cockpit atmosphere */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(232, 224, 208, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 224, 208, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Grain texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.8 0 0 0 0 0.75 0 0 0 0 0.65 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 2;
+  mix-blend-mode: overlay;
+}
+
+#app {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Numbers use tabular figures — critical for trading data */
+.mono, .stat-value, td.num, .ticker-tag {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ========================================================================
+   HEADER
+   ======================================================================== */
+.app-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: var(--sp-4) var(--sp-6);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(20,18,22,0.8), rgba(15,13,16,0.6));
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-size: 18px;
+  transform: rotate(45deg);
+  border: 1px solid var(--border-accent);
+  background: linear-gradient(135deg, rgba(201,169,97,0.1), transparent);
+}
+.brand-mark span { transform: rotate(-45deg); }
+
+.brand h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.brand h1 em {
+  color: var(--gold);
+  font-style: italic;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  justify-content: center;
+}
+
+.mode-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  padding: 4px 10px;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+.mode-badge.paper  { color: var(--gold);     border-color: var(--border-accent); background: rgba(201,169,97,0.06); }
+.mode-badge.live   { color: var(--critical); border-color: var(--critical); background: rgba(255,64,48,0.08); animation: pulse-bg 2s infinite; }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.status-chip .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  position: relative;
+}
+.status-chip.ok    .dot { background: var(--positive); box-shadow: 0 0 0 0 var(--positive-glow); animation: pulse 2s infinite; }
+.status-chip.warn  .dot { background: var(--warning); }
+.status-chip.crit  .dot { background: var(--critical); animation: pulse-fast 0.8s infinite; }
+.status-chip.ok    { color: var(--text); }
+.status-chip.crit  { color: var(--critical); }
+
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0   var(--positive-glow); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
+}
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+@keyframes pulse-bg {
+  0%, 100% { background: rgba(255,64,48,0.08); }
+  50%      { background: rgba(255,64,48,0.18); }
+}
+
+.stop-button {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  color: var(--critical);
+  background: var(--bg-elevated);
+  border: 1px solid var(--critical);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.stop-button::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px solid var(--critical);
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+.stop-button:hover {
+  background: var(--critical);
+  color: var(--bg-void);
+  box-shadow: 0 0 32px rgba(255,64,48,0.35);
+}
+.stop-button:hover::before {
+  opacity: 0.4;
+  inset: -5px;
+}
+.stop-button .stop-icon {
+  width: 10px; height: 10px;
+  background: currentColor;
+}
+
+/* ========================================================================
+   DASHBOARD GRID
+   ======================================================================== */
+.dashboard {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-6);
+  max-width: 1800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  position: relative;
+  opacity: 0;
+  animation: fade-up 0.6s ease-out forwards;
+}
+.panel:nth-child(1) { animation-delay: 0.05s; }
+.panel:nth-child(2) { animation-delay: 0.12s; }
+.panel:nth-child(3) { animation-delay: 0.18s; }
+.panel:nth-child(4) { animation-delay: 0.24s; }
+.panel:nth-child(5) { animation-delay: 0.3s; }
+.panel:nth-child(6) { animation-delay: 0.36s; }
+.panel:nth-child(7) { animation-delay: 0.42s; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Decorative corner tick marks on panels */
+.panel::before, .panel::after {
+  content: '';
+  position: absolute;
+  width: 8px; height: 8px;
+  border: 1px solid var(--border-strong);
+}
+.panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.panel::after  { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+.panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.panel-header h2 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.panel-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+/* Grid zones */
+.panel-account   { grid-column: 1; grid-row: 1; }
+.panel-goal      { grid-column: 2; grid-row: 1; }
+.panel-positions { grid-column: 1; grid-row: 2 / 4; }
+.panel-signals   { grid-column: 2; grid-row: 2; }
+.panel-watchlist { grid-column: 2; grid-row: 3; }
+.panel-history   { grid-column: 1 / 3; grid-row: 4; }
+
+/* ========================================================================
+   ACCOUNT PANEL
+   ======================================================================== */
+.account-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--sp-5);
+  align-items: end;
+}
+.stat label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: var(--sp-2);
+}
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.stat-small .stat-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.stat-value.pos { color: var(--positive); }
+.stat-value.neg { color: var(--negative); }
+.stat-value .currency {
+  font-size: 0.55em;
+  color: var(--text-muted);
+  margin-right: 4px;
+  font-style: italic;
+}
+.stat-delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+}
+.stat-delta.pos { color: var(--positive); }
+.stat-delta.neg { color: var(--negative); }
+
+/* ========================================================================
+   GOAL PANEL
+   ======================================================================== */
+.goal-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  flex: 1;
+  justify-content: center;
+}
+.goal-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-family: var(--font-display);
+}
+.goal-current {
+  font-size: 38px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.goal-current.pos { color: var(--positive); }
+.goal-current.neg { color: var(--negative); }
+.goal-sep {
+  color: var(--text-muted);
+  font-size: 24px;
+  font-style: italic;
+}
+.goal-target {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-dim);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.progress-track {
+  height: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.progress-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+  transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.progress-fill.complete { background: linear-gradient(90deg, var(--positive), #8db873); }
+.progress-fill.negative { background: linear-gradient(90deg, var(--negative), #e06868); }
+.goal-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.goal-pct { color: var(--text); font-weight: 600; }
+.goal-status { color: var(--text-dim); }
+
+.edit-btn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+.edit-btn:hover {
+  color: var(--gold);
+  border-color: var(--border-accent);
+}
+
+/* ========================================================================
+   BREAKER ROW (inside header status)
+   ======================================================================== */
+.breaker-meta {
+  display: flex;
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.breaker-meta .micro-stat {
+  flex: 1;
+}
+.micro-stat label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.micro-stat .v {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================================
+   DATA TABLE (positions, history)
+   ======================================================================== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.data-table thead th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr {
+  transition: background 0.1s ease;
+}
+.data-table tbody tr:hover {
+  background: var(--bg-elevated);
+}
+.data-table td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.data-table td.num.pos { color: var(--positive); }
+.data-table td.num.neg { color: var(--negative); }
+
+.ticker-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  letter-spacing: 0.05em;
+  font-size: 11px;
+}
+
+.side-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+.side-tag.long  { color: var(--positive); background: rgba(106,153,85,0.1); }
+.side-tag.short { color: var(--negative); background: rgba(212,74,74,0.1); }
+
+.row-action {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+.row-action:hover {
+  color: var(--negative);
+  border-color: var(--negative);
+}
+
+.empty-row td, .empty-state {
+  text-align: center;
+  padding: var(--sp-8);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* Table scroll container */
+.table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.table-wrap::-webkit-scrollbar { width: 6px; }
+.table-wrap::-webkit-scrollbar-track { background: var(--bg-input); }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border-strong); }
+
+/* ========================================================================
+   SIGNALS
+   ======================================================================== */
+.signals-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.signals-list::-webkit-scrollbar { width: 6px; }
+.signals-list::-webkit-scrollbar-track { background: transparent; }
+.signals-list::-webkit-scrollbar-thumb { background: var(--border-strong); }
+
+.signal-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--gold);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.signal-card.buy  { border-left-color: var(--positive); }
+.signal-card.sell { border-left-color: var(--negative); }
+
+.signal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.signal-action {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: var(--text);
+}
+.signal-action.buy  { color: var(--positive); }
+.signal-action.sell { color: var(--negative); }
+
+.signal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--sp-2);
+}
+.signal-body .micro-stat .v { font-size: 11px; }
+
+.signal-reasons {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  font-style: italic;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+.signal-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.btn-approve, .btn-reject {
+  flex: 1;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-approve { color: var(--positive); border-color: var(--positive); }
+.btn-reject  { color: var(--negative); border-color: var(--negative); }
+.btn-approve:hover { background: var(--positive); color: var(--bg-void); }
+.btn-reject:hover  { background: var(--negative); color: var(--bg-void); }
+
+/* ========================================================================
+   WATCHLIST
+   ======================================================================== */
+.ticker-input {
+  display: flex;
+  gap: var(--sp-2);
+}
+.ticker-input input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.ticker-input input:focus {
+  border-color: var(--border-accent);
+}
+.ticker-input input::placeholder {
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+}
+.ticker-input button {
+  width: 32px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.ticker-input button:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-accent);
+}
+
+.watchlist-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  flex: 1;
+  overflow-y: auto;
+  align-content: flex-start;
+  padding-top: var(--sp-1);
+}
+.watchlist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 5px 6px 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+.watchlist-chip button {
+  width: 16px; height: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.watchlist-chip button:hover { color: var(--negative); }
+
+/* ========================================================================
+   HISTORY
+   ======================================================================== */
+.panel-history .table-wrap { max-height: 240px; }
+
+/* ========================================================================
+   MODAL
+   ======================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 7, 10, 0.85);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-accent);
+  padding: var(--sp-8);
+  max-width: 520px;
+  width: 90%;
+  position: relative;
+  transform: scale(0.97);
+  transition: transform 0.2s ease;
+}
+.modal-overlay.open .modal { transform: scale(1); }
+
+.modal::before, .modal::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+  border: 1px solid var(--gold);
+}
+.modal::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.modal::after  { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+.modal-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: var(--critical);
+  text-transform: uppercase;
+  margin-bottom: var(--sp-2);
+}
+.modal h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.1;
+  margin-bottom: var(--sp-3);
+  color: var(--text);
+}
+.modal h2 em { color: var(--gold); font-style: italic; }
+.modal p {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: var(--sp-5);
+}
+
+.modal-summary {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.modal-summary .label {
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.modal-summary .value { color: var(--text); font-weight: 500; }
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.btn-option {
+  text-align: left;
+  padding: var(--sp-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: inherit;
+}
+.btn-option:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-panel);
+}
+.btn-option.danger:hover {
+  border-color: var(--negative);
+}
+.btn-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.btn-option.danger .btn-title { color: var(--negative); }
+.btn-option.safe .btn-title   { color: var(--gold); }
+.btn-sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
+.btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: var(--sp-2);
+  transition: all 0.15s ease;
+}
+.btn-cancel:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* ========================================================================
+   TOAST
+   ======================================================================== */
+.toast-stack {
+  position: fixed;
+  bottom: var(--sp-5);
+  right: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  z-index: 200;
+}
+.toast {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-left: 2px solid var(--gold);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 12px;
+  color: var(--text);
+  min-width: 240px;
+  animation: toast-in 0.25s ease-out;
+}
+.toast.error { border-left-color: var(--negative); }
+.toast.ok    { border-left-color: var(--positive); }
+.toast-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ========================================================================
+   FLASH updates
+   ======================================================================== */
+@keyframes flash-pos {
+  0%   { background: rgba(106,153,85,0.25); }
+  100% { background: transparent; }
+}
+@keyframes flash-neg {
+  0%   { background: rgba(212,74,74,0.25); }
+  100% { background: transparent; }
+}
+.flash-pos { animation: flash-pos 0.9s ease-out; }
+.flash-neg { animation: flash-neg 0.9s ease-out; }
+
+/* ========================================================================
+   RESPONSIVE
+   ======================================================================== */
+@media (max-width: 1100px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  .panel-account, .panel-goal, .panel-positions,
+  .panel-signals, .panel-watchlist, .panel-history {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .account-grid { grid-template-columns: 1fr 1fr; }
+  .app-header { grid-template-columns: auto 1fr auto; }
+  .header-status { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark"><span>◆</span></div>
+      <h1>Trading <em>Terminal</em></h1>
+    </div>
+
+    <div class="header-status">
+      <span class="mode-badge paper" id="mode-badge">PAPER</span>
+      <span class="status-chip ok" id="breaker-chip">
+        <span class="dot"></span>
+        <span id="breaker-text">BREAKER ARMED</span>
+      </span>
+      <span class="status-chip ok" id="conn-chip">
+        <span class="dot"></span>
+        <span id="conn-text">CONNECTED</span>
+      </span>
+      <span class="status-chip" id="clock-chip">
+        <span id="clock">—</span>
+      </span>
+    </div>
+
+    <button class="stop-button" id="stop-btn">
+      <span class="stop-icon"></span>
+      <span>STOP</span>
+    </button>
+  </header>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <main class="dashboard">
+
+    <!-- ACCOUNT -->
+    <section class="panel panel-account">
+      <div class="panel-header">
+        <h2>Account Overview</h2>
+        <span class="panel-meta" id="acct-meta">SYNCING…</span>
+      </div>
+      <div class="account-grid">
+        <div class="stat">
+          <label>Balance</label>
+          <div class="stat-value" id="balance"><span class="currency">$</span>—</div>
+          <div class="stat-delta" id="balance-delta">&nbsp;</div>
+        </div>
+        <div class="stat stat-small">
+          <label>Equity</label>
+          <div class="stat-value" id="equity">$—</div>
+        </div>
+        <div class="stat stat-small">
+          <label>Buying Pwr</label>
+          <div class="stat-value" id="bp">$—</div>
+        </div>
+        <div class="stat stat-small">
+          <label>Cash</label>
+          <div class="stat-value" id="cash">$—</div>
+        </div>
+      </div>
+      <div class="breaker-meta">
+        <div class="micro-stat">
+          <label>Daily P&amp;L</label>
+          <div class="v" id="day-pnl">$0.00</div>
+        </div>
+        <div class="micro-stat">
+          <label>Total P&amp;L</label>
+          <div class="v" id="total-pnl">$0.00</div>
+        </div>
+        <div class="micro-stat">
+          <label>Positions Value</label>
+          <div class="v" id="pos-value">$0.00</div>
+        </div>
+        <div class="micro-stat">
+          <label>Consec Losses</label>
+          <div class="v" id="consec-losses">0 / 5</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GOAL -->
+    <section class="panel panel-goal">
+      <div class="panel-header">
+        <h2>Daily Objective</h2>
+        <button class="edit-btn" id="edit-goal">EDIT</button>
+      </div>
+      <div class="goal-content">
+        <div class="goal-numbers">
+          <span class="goal-current" id="goal-current">$0.00</span>
+          <span class="goal-sep">/</span>
+          <span class="goal-target" id="goal-target">$200.00</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="goal-fill"></div>
+        </div>
+        <div class="goal-meta">
+          <span class="goal-pct" id="goal-pct">0%</span>
+          <span class="goal-status" id="goal-status">Awaiting signals</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- POSITIONS -->
+    <section class="panel panel-positions">
+      <div class="panel-header">
+        <h2>Open Positions</h2>
+        <span class="panel-meta" id="pos-count">0 OPEN</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Side</th>
+              <th style="text-align:right">Qty</th>
+              <th style="text-align:right">Avg</th>
+              <th style="text-align:right">Current</th>
+              <th style="text-align:right">Value</th>
+              <th style="text-align:right">P&amp;L</th>
+              <th style="text-align:right">%</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="positions-body">
+            <tr class="empty-row"><td colspan="9">No open positions</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SIGNALS -->
+    <section class="panel panel-signals">
+      <div class="panel-header">
+        <h2>Pending Signals</h2>
+        <span class="panel-meta" id="sig-count">0</span>
+      </div>
+      <div class="signals-list" id="signals-body">
+        <div class="empty-state">Awaiting signals</div>
+      </div>
+    </section>
+
+    <!-- WATCHLIST -->
+    <section class="panel panel-watchlist">
+      <div class="panel-header">
+        <h2>Watchlist</h2>
+        <span class="panel-meta" id="wl-count">0</span>
+      </div>
+      <form class="ticker-input" id="add-form">
+        <input id="ticker-in" type="text" placeholder="ADD TICKER" maxlength="5" autocomplete="off" />
+        <button type="submit" aria-label="Add">+</button>
+      </form>
+      <div class="watchlist-grid" id="watchlist-body"></div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="panel panel-history">
+      <div class="panel-header">
+        <h2>Recent Activity</h2>
+        <span class="panel-meta">LAST 25</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Ticker</th>
+              <th>Action</th>
+              <th style="text-align:right">Qty</th>
+              <th style="text-align:right">Price</th>
+              <th style="text-align:right">P&amp;L</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr class="empty-row"><td colspan="7">No activity yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== STOP MODAL ==================== -->
+  <div class="modal-overlay" id="stop-modal">
+    <div class="modal">
+      <div class="modal-label">● Shutdown Sequence</div>
+      <h2>Stop the <em>terminal</em></h2>
+      <p>Trading will halt immediately. Choose how to handle any open positions before the process exits.</p>
+
+      <div class="modal-summary">
+        <div>
+          <div class="label">Open Positions</div>
+          <div class="value" id="modal-pos-count">—</div>
+        </div>
+        <div>
+          <div class="label">Unrealized P&amp;L</div>
+          <div class="value" id="modal-pos-pnl">—</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-option danger" data-close="true">
+          <span class="btn-title">▸ Close All &amp; Shutdown</span>
+          <span class="btn-sub">Liquidate every open position at market, then stop.</span>
+        </button>
+        <button class="btn-option safe" data-close="false">
+          <span class="btn-title">▸ Keep Positions &amp; Shutdown</span>
+          <span class="btn-sub">Leave positions open — resume where you left off next session.</span>
+        </button>
+        <button class="btn-cancel" id="cancel-stop">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toasts"></div>
+</div>
+
+<script>
+/* =========================================================================
+   TRADING TERMINAL — FRONTEND
+   ========================================================================= */
+
+const POLL_STATUS  = 3000;
+const POLL_SIGNALS = 4000;
+const POLL_HISTORY = 15000;
+
+const $  = sel => document.querySelector(sel);
+const $$ = sel => document.querySelectorAll(sel);
+
+/* ---------- formatters ---------- */
+const fmt = {
+  money(n, opts = {}) {
+    if (n === null || n === undefined || Number.isNaN(+n)) return '$—';
+    const sign = opts.signed && n > 0 ? '+' : '';
+    return sign + '$' + Math.abs(n).toLocaleString('en-US', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).replace(/^/, n < 0 ? '-' : '');
+  },
+  pct(n, opts = {}) {
+    if (n === null || n === undefined || Number.isNaN(+n)) return '—';
+    const sign = opts.signed && n > 0 ? '+' : '';
+    return sign + n.toFixed(2) + '%';
+  },
+  int(n) { return (n ?? 0).toLocaleString('en-US'); },
+  time(ts) {
+    if (!ts) return '—';
+    const d = typeof ts === 'number' ? new Date(ts) : new Date(ts);
+    return d.toLocaleTimeString('en-US', { hour12: false });
+  }
+};
+
+/* ---------- API ---------- */
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const err = new Error(`${res.status} ${res.statusText} — ${text}`);
+    err.status = res.status;
+    throw err;
+  }
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('json') ? res.json() : res.text();
+}
+
+/* ---------- toast ---------- */
+function toast(msg, type = '', label = 'Notice') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<div class="toast-label">${label}</div>${msg}`;
+  $('#toasts').appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.3s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+/* ---------- state ---------- */
+const state = {
+  status: null,
+  signals: [],
+  watchlist: [],
+  history: [],
+  prev: {},
+  connected: false
+};
+
+/* ---------- polling ---------- */
+async function pollStatus() {
+  try {
+    const [status, watchlist] = await Promise.all([
+      api('GET', '/api/status').catch(e => { throw e; }),
+      api('GET', '/api/watchlist').catch(() => [])
+    ]);
+    state.status    = status;
+    state.watchlist = Array.isArray(watchlist) ? watchlist : (watchlist?.tickers || []);
+    setConnected(true);
+    render();
+  } catch (err) {
+    setConnected(false);
+  }
+}
+
+async function pollSignals() {
+  try {
+    const sigs = await api('GET', '/api/signals');
+    state.signals = Array.isArray(sigs) ? sigs : (sigs?.signals || []);
+    renderSignals();
+  } catch (err) {
+    // silent
+  }
+}
+
+async function pollHistory() {
+  try {
+    const h = await api('GET', '/api/history');
+    state.history = Array.isArray(h) ? h : (h?.trades || h?.history || []);
+    renderHistory();
+  } catch (err) {
+    // silent
+  }
+}
+
+function setConnected(ok) {
+  state.connected = ok;
+  const chip = $('#conn-chip');
+  const text = $('#conn-text');
+  chip.classList.remove('ok', 'crit');
+  if (ok) {
+    chip.classList.add('ok');
+    text.textContent = 'CONNECTED';
+  } else {
+    chip.classList.add('crit');
+    text.textContent = 'DISCONNECTED';
+  }
+}
+
+/* ---------- render ---------- */
+function render() {
+  const s = state.status;
+  if (!s) return;
+
+  const acct = s.account || s;
+  const mode = (s.mode || 'paper').toUpperCase();
+  const modeBadge = $('#mode-badge');
+  modeBadge.textContent = mode;
+  modeBadge.className = 'mode-badge ' + mode.toLowerCase();
+
+  // Account
+  const balance = acct.balance ?? acct.cash ?? 0;
+  setNum('#balance', balance, 'money', true);
+  setNum('#equity', acct.equity ?? balance, 'money');
+  setNum('#bp', acct.buying_power ?? balance, 'money');
+  setNum('#cash', acct.cash ?? balance, 'money');
+  setNum('#pos-value', acct.positions_value ?? 0, 'money');
+
+  // P&L
+  const dpl = acct.daily_pnl ?? 0;
+  const tpl = acct.total_pnl ?? 0;
+  setPnL('#day-pnl', dpl);
+  setPnL('#total-pnl', tpl);
+
+  // Goal
+  const goal = s.goal || {};
+  const target = goal.target ?? 200;
+  const current = goal.current ?? dpl;
+  const pct = target > 0 ? (current / target) * 100 : 0;
+  $('#goal-target').textContent = fmt.money(target);
+  const gc = $('#goal-current');
+  gc.textContent = fmt.money(current, { signed: true });
+  gc.className = 'goal-current ' + (current > 0 ? 'pos' : current < 0 ? 'neg' : '');
+  const fill = $('#goal-fill');
+  fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  fill.classList.toggle('complete', pct >= 100);
+  fill.classList.toggle('negative', current < 0);
+  $('#goal-pct').textContent = (pct >= 0 ? '' : '') + pct.toFixed(0) + '%';
+  $('#goal-status').textContent = goal.status ||
+    (pct >= 100 ? 'Target reached' : current < 0 ? 'In drawdown' : 'On track');
+
+  // Circuit breaker
+  const cb = s.circuit_breaker || {};
+  const cbChip = $('#breaker-chip');
+  const cbText = $('#breaker-text');
+  cbChip.classList.remove('ok', 'warn', 'crit');
+  if (cb.tripped) {
+    cbChip.classList.add('crit');
+    cbText.textContent = 'BREAKER TRIPPED';
+  } else if (cb.armed === false) {
+    cbChip.classList.add('warn');
+    cbText.textContent = 'BREAKER DISARMED';
+  } else {
+    cbChip.classList.add('ok');
+    cbText.textContent = 'BREAKER ARMED';
+  }
+  const cl = cb.consecutive_losses ?? 0;
+  const mx = cb.max_consecutive ?? 5;
+  $('#consec-losses').textContent = `${cl} / ${mx}`;
+
+  // Positions
+  renderPositions(s.positions || {});
+
+  $('#acct-meta').textContent = 'SYNCED ' + new Date().toLocaleTimeString('en-US', { hour12: false });
+
+  renderWatchlist();
+}
+
+function setNum(sel, value, kind, big) {
+  const el = $(sel);
+  if (!el) return;
+  const prev = state.prev[sel];
+  let text;
+  if (kind === 'money') {
+    text = fmt.money(value);
+  } else if (kind === 'pct') {
+    text = fmt.pct(value);
+  } else {
+    text = String(value);
+  }
+  if (big && text.startsWith('$')) {
+    el.innerHTML = `<span class="currency">$</span>${text.slice(1)}`;
+  } else {
+    el.textContent = text;
+  }
+  if (prev !== undefined && prev !== value) {
+    el.classList.remove('flash-pos', 'flash-neg');
+    void el.offsetWidth;
+    el.classList.add(value > prev ? 'flash-pos' : 'flash-neg');
+  }
+  state.prev[sel] = value;
+}
+
+function setPnL(sel, value) {
+  const el = $(sel);
+  if (!el) return;
+  el.textContent = fmt.money(value, { signed: true });
+  el.classList.remove('pos', 'neg');
+  if (value > 0) el.classList.add('pos');
+  if (value < 0) el.classList.add('neg');
+}
+
+function renderPositions(positions) {
+  const body = $('#positions-body');
+  const keys = Object.keys(positions || {});
+  $('#pos-count').textContent = keys.length + ' OPEN';
+
+  if (!keys.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="9">No open positions</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = keys.map(k => {
+    const p = positions[k];
+    const pnl = p.unrealized_pnl ?? 0;
+    const pnlPct = p.pnl_pct ?? 0;
+    const side = (p.side || 'long').toLowerCase();
+    return `
+      <tr data-ticker="${p.ticker}">
+        <td><span class="ticker-tag">${p.ticker}</span></td>
+        <td><span class="side-tag ${side}">${side}</span></td>
+        <td class="num">${fmt.int(p.quantity)}</td>
+        <td class="num">${fmt.money(p.avg_price)}</td>
+        <td class="num">${fmt.money(p.current_price)}</td>
+        <td class="num">${fmt.money(p.market_value)}</td>
+        <td class="num ${pnl >= 0 ? 'pos' : 'neg'}">${fmt.money(pnl, { signed: true })}</td>
+        <td class="num ${pnlPct >= 0 ? 'pos' : 'neg'}">${fmt.pct(pnlPct, { signed: true })}</td>
+        <td><button class="row-action" data-close="${p.ticker}">Close</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  body.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ticker = btn.dataset.close;
+      if (!confirm(`Close position in ${ticker}?`)) return;
+      try {
+        await api('POST', `/api/close/${ticker}`);
+        toast(`Close order submitted for ${ticker}`, 'ok', 'Order');
+        pollStatus();
+      } catch (e) {
+        toast(e.message, 'error', 'Error');
+      }
+    });
+  });
+}
+
+function renderSignals() {
+  const body = $('#signals-body');
+  $('#sig-count').textContent = state.signals.length;
+  if (!state.signals.length) {
+    body.innerHTML = `<div class="empty-state">Awaiting signals</div>`;
+    return;
+  }
+
+  body.innerHTML = state.signals.map(sig => {
+    const action = (sig.action || sig.side || 'buy').toLowerCase();
+    const conf = sig.confidence ?? sig.conf ?? 0;
+    const confluence = sig.confluence ?? sig.confluence_count ?? 0;
+    const reasons = sig.reasons || sig.rationale || [];
+    const reasonText = Array.isArray(reasons) ? reasons.join(' · ') : String(reasons);
+    return `
+      <div class="signal-card ${action}" data-id="${sig.id}">
+        <div class="signal-head">
+          <span class="signal-action ${action}">${action.toUpperCase()} ${sig.ticker}</span>
+          <span class="panel-meta">${sig.strategy || sig.type || ''}</span>
+        </div>
+        <div class="signal-body">
+          <div class="micro-stat"><label>Confidence</label><div class="v">${(conf * 100).toFixed(0)}%</div></div>
+          <div class="micro-stat"><label>Confluence</label><div class="v">${confluence}</div></div>
+          <div class="micro-stat"><label>Size</label><div class="v">${sig.size ? fmt.money(sig.size) : '—'}</div></div>
+        </div>
+        ${reasonText ? `<div class="signal-reasons">${reasonText}</div>` : ''}
+        <div class="signal-actions">
+          <button class="btn-approve" data-approve="${sig.id}">Approve</button>
+          <button class="btn-reject"  data-reject="${sig.id}">Reject</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  body.querySelectorAll('[data-approve]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', `/api/approve/${btn.dataset.approve}`);
+        toast('Signal approved', 'ok', 'Signal');
+        pollSignals();
+      } catch (e) { toast(e.message, 'error', 'Error'); }
+    });
+  });
+  body.querySelectorAll('[data-reject]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', `/api/reject/${btn.dataset.reject}`);
+        toast('Signal rejected', '', 'Signal');
+        pollSignals();
+      } catch (e) { toast(e.message, 'error', 'Error'); }
+    });
+  });
+}
+
+function renderWatchlist() {
+  const body = $('#watchlist-body');
+  $('#wl-count').textContent = state.watchlist.length;
+  if (!state.watchlist.length) {
+    body.innerHTML = `<div class="empty-state" style="width:100%">No tickers</div>`;
+    return;
+  }
+  body.innerHTML = state.watchlist.map(t => {
+    const ticker = typeof t === 'string' ? t : t.ticker;
+    return `
+      <span class="watchlist-chip">
+        ${ticker}
+        <button data-remove="${ticker}" aria-label="Remove">×</button>
+      </span>
+    `;
+  }).join('');
+  body.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('DELETE', `/api/watchlist/${btn.dataset.remove}`);
+        pollStatus();
+      } catch (e) { toast(e.message, 'error', 'Error'); }
+    });
+  });
+}
+
+function renderHistory() {
+  const body = $('#history-body');
+  if (!state.history.length) {
+    body.innerHTML = `<tr class="empty-row"><td colspan="7">No activity yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = state.history.slice(0, 25).map(h => {
+    const pnl = h.pnl ?? h.realized_pnl ?? null;
+    const action = (h.action || h.side || '').toUpperCase();
+    return `
+      <tr>
+        <td style="color:var(--text-muted);font-family:var(--font-mono);font-size:11px;">${fmt.time(h.timestamp || h.time)}</td>
+        <td><span class="ticker-tag">${h.ticker || '—'}</span></td>
+        <td><span class="side-tag ${action.toLowerCase().includes('buy') || action === 'LONG' ? 'long' : 'short'}">${action || '—'}</span></td>
+        <td class="num">${fmt.int(h.quantity ?? h.qty ?? 0)}</td>
+        <td class="num">${fmt.money(h.price ?? h.filled_price ?? 0)}</td>
+        <td class="num ${pnl === null ? '' : pnl >= 0 ? 'pos' : 'neg'}">${pnl === null ? '—' : fmt.money(pnl, { signed: true })}</td>
+        <td style="color:var(--text-dim);font-size:11px;">${h.message || h.notes || ''}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ---------- watchlist add ---------- */
+$('#add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#ticker-in');
+  const ticker = input.value.trim().toUpperCase();
+  if (!ticker) return;
+  try {
+    await api('POST', `/api/watchlist/${ticker}`);
+    input.value = '';
+    pollStatus();
+  } catch (err) { toast(err.message, 'error', 'Error'); }
+});
+
+/* ---------- edit goal ---------- */
+$('#edit-goal').addEventListener('click', async () => {
+  const current = state.status?.goal?.target ?? 200;
+  const v = prompt('New daily profit target ($):', current.toFixed(2));
+  if (v === null) return;
+  const target = parseFloat(v);
+  if (Number.isNaN(target) || target <= 0) {
+    toast('Invalid target', 'error', 'Error');
+    return;
+  }
+  try {
+    await api('POST', `/api/goal?target=${target}`);
+    toast(`Target set to ${fmt.money(target)}`, 'ok', 'Goal');
+    pollStatus();
+  } catch (e) { toast(e.message, 'error', 'Error'); }
+});
+
+/* ---------- clock ---------- */
+function tickClock() {
+  const now = new Date();
+  $('#clock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ---------- stop modal ---------- */
+const modal = $('#stop-modal');
+$('#stop-btn').addEventListener('click', () => {
+  const positions = state.status?.positions || {};
+  const keys = Object.keys(positions);
+  const totalPnl = keys.reduce((sum, k) => sum + (positions[k].unrealized_pnl ?? 0), 0);
+  $('#modal-pos-count').textContent = keys.length;
+  $('#modal-pos-pnl').textContent = fmt.money(totalPnl, { signed: true });
+  $('#modal-pos-pnl').style.color = totalPnl >= 0 ? 'var(--positive)' : 'var(--negative)';
+  modal.classList.add('open');
+});
+$('#cancel-stop').addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', (e) => {
+  if (e.target === modal) modal.classList.remove('open');
+});
+
+modal.querySelectorAll('[data-close]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const closePositions = btn.dataset.close === 'true';
+    btn.disabled = true;
+    try {
+      await api('POST', `/api/shutdown?close_positions=${closePositions}`);
+      modal.classList.remove('open');
+      toast(closePositions
+        ? 'Closing all positions and shutting down…'
+        : 'Shutting down — positions preserved', 'ok', 'Shutdown');
+      setTimeout(() => {
+        document.body.innerHTML =
+          `<div style="display:grid;place-items:center;min-height:100vh;font-family:'Instrument Serif',serif;
+           font-size:32px;color:#c9a961;background:#08070a;">Terminal offline.</div>`;
+      }, 2000);
+    } catch (e) {
+      btn.disabled = false;
+      toast(e.message + ' — shutdown endpoint may not be implemented', 'error', 'Error');
+    }
+  });
+});
+
+/* ---------- boot ---------- */
+pollStatus();
+pollSignals();
+pollHistory();
+setInterval(pollStatus,  POLL_STATUS);
+setInterval(pollSignals, POLL_SIGNALS);
+setInterval(pollHistory, POLL_HISTORY);
+</script>
+</body>
+</html>
