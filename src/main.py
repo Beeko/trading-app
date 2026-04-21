@@ -111,12 +111,14 @@ class TradingApp:
 
         # Inject services into dashboard
         set_services({
-            "goal_engine": self.goal_engine,
-            "risk_manager": self.risk_manager,
-            "broker": self.broker,
-            "scanner": self.scanner,
-            "signal_log": self._signal_log,
+            "goal_engine":     self.goal_engine,
+            "risk_manager":    self.risk_manager,
+            "circuit_breaker": self.circuit_breaker,
+            "broker":          self.broker,
+            "scanner":         self.scanner,
+            "signal_log":      self._signal_log,
             "pending_signals": self._pending_signals,
+            "app":             self,
         })
 
         # ── Schedule periodic tasks ──
