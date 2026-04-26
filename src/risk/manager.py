@@ -5,7 +5,7 @@ to approve or reject trades with full reasoning.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from src.strategy.signals import TradeSignal
 from src.risk.circuit_breaker import CircuitBreaker
@@ -107,7 +107,7 @@ class RiskManager:
         decision = RiskDecision(
             approved=approved,
             signal=signal,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             reasons=reasons,
             failed_rules=failed_rules,
             adjusted_size_pct=adjusted_size if approved else 0.0,

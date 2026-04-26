@@ -4,6 +4,7 @@ low-risk options strategies based on direction, risk profile, and Greeks.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 from src.data.market_data import OptionContract
 from src.strategy.signals import TradeSignal
@@ -306,9 +307,8 @@ class OptionsStrategySelector:
     @staticmethod
     def _dte(contract: OptionContract) -> int:
         """Days to expiration."""
-        from datetime import datetime
         try:
             exp = datetime.strptime(contract.expiration, "%Y-%m-%d")
-            return max((exp - datetime.utcnow()).days, 0)
+            return max((exp - datetime.now(timezone.utc).replace(tzinfo=None)).days, 0)
         except (ValueError, TypeError):
             return 0

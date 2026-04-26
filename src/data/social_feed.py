@@ -3,9 +3,10 @@ Social feed service — monitors Reddit, Stocktwits, and other social
 sources to detect trending stocks and sentiment shifts.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+import re
 from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import httpx
 from src.utils.logger import get_logger
@@ -73,8 +74,8 @@ class SocialFeedService:
                     tickers=tickers,
                     upvotes=data.get("ups", 0),
                     timestamp=datetime.fromtimestamp(
-                        data.get("created_utc", 0)
-                    ),
+                        data.get("created_utc", 0), tz=timezone.utc
+                    ).replace(tzinfo=None),
                     url=f"https://reddit.com{data.get('permalink', '')}",
                     subreddit=subreddit,
                 ))
@@ -107,7 +108,7 @@ class SocialFeedService:
                     timestamp=datetime.strptime(
                         msg.get("created_at", ""),
                         "%Y-%m-%dT%H:%M:%SZ",
-                    ) if msg.get("created_at") else datetime.utcnow(),
+                    ) if msg.get("created_at") else datetime.now(timezone.utc).replace(tzinfo=None),
                     url=f"https://stocktwits.com/message/{msg.get('id', '')}",
                 ))
             log.info(f"Fetched {len(posts)} Stocktwits posts for {ticker}")
@@ -138,7 +139,7 @@ class SocialFeedService:
 
     def get_trending(self, min_mentions: int = 5) -> list[TrendingTicker]:
         """Identify tickers with unusual social activity."""
-        cutoff = datetime.utcnow() - timedelta(hours=4)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=4)
         recent_mentions: Counter[str] = Counter()
 
         for post in self._post_cache:
@@ -153,7 +154,7 @@ class SocialFeedService:
             timestamps = self._mention_history.get(ticker, [])
             recent = [t for t in timestamps if t >= cutoff]
             hours = max(
-                (datetime.utcnow() - min(recent)).total_seconds() / 3600,
+                (datetime.now(timezone.utc).replace(tzinfo=None) - min(recent)).total_seconds() / 3600,
                 0.1,
             ) if recent else 1.0
 
@@ -163,7 +164,7 @@ class SocialFeedService:
                 velocity=round(count / hours, 1),
                 avg_sentiment=0.0,  # filled by sentiment engine
                 top_source=self._top_source_for(ticker),
-                first_seen=min(recent) if recent else datetime.utcnow(),
+                first_seen=min(recent) if recent else datetime.now(timezone.utc).replace(tzinfo=None),
             ))
 
         return sorted(trending, key=lambda t: t.velocity, reverse=True)
@@ -179,7 +180,6 @@ class SocialFeedService:
     @staticmethod
     def _extract_tickers_from_text(text: str) -> list[str]:
         """Extract likely stock tickers from text ($AAPL or all-caps 2-5 chars)."""
-        import re
         # Match $TICKER pattern
         dollar_tickers = re.findall(r'\$([A-Z]{1,5})\b', text)
         # Match standalone all-caps words (2-5 chars, likely tickers)
@@ -205,7 +205,7 @@ class SocialFeedService:
         return all_tickers[:5]  # cap at 5 per post
 
     def _prune_cache(self):
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
         self._post_cache = [
             p for p in self._post_cache if p.timestamp >= cutoff
         ]

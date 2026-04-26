@@ -4,7 +4,7 @@ and adjusts position sizing based on progress toward the goal.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from enum import Enum
 from typing import Optional
 from config import settings

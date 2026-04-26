@@ -18,6 +18,8 @@ LOG_DIR = Path(os.getenv("LOG_DIR", DATA_DIR / "logs"))
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY", "")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
 ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+# "iex" = free tier  |  "sip" = paid/live consolidated tape
+ALPACA_DATA_FEED = os.getenv("ALPACA_DATA_FEED", "iex")
 
 # ── Trading mode ──
 TRADING_MODE = os.getenv("TRADING_MODE", "paper")  # "paper" | "live"
@@ -73,3 +75,13 @@ ALLOWED_OPTIONS_STRATEGIES = [
 # ── Stock filters ──
 MIN_STOCK_PRICE = 5.00       # no penny stocks
 MIN_AVERAGE_VOLUME = 500_000  # liquidity floor
+
+# ── Default watchlist (shown immediately on startup) ──
+DEFAULT_WATCHLIST = [
+    t.strip().upper()
+    for t in os.getenv(
+        "DEFAULT_WATCHLIST",
+        "SPY,QQQ,AAPL,MSFT,NVDA,TSLA,AMZN,META,GOOGL,AMD",
+    ).split(",")
+    if t.strip()
+]

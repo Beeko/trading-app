@@ -5,7 +5,7 @@ realistic fill simulation and logs everything identically to live.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from src.execution.broker import (
     BaseBroker, OrderRequest, OrderResult, Position, AccountInfo,
@@ -89,7 +89,7 @@ class PaperTrader(BaseBroker):
                 status="rejected",
                 filled_qty=0,
                 filled_price=0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"No quote available for {order.ticker}",
             )
             self._orders[result.order_id] = result
@@ -112,7 +112,7 @@ class PaperTrader(BaseBroker):
                     status="pending",
                     filled_qty=0,
                     filled_price=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                     message="Limit price not met",
                 )
                 self._orders[result.order_id] = result
@@ -131,7 +131,7 @@ class PaperTrader(BaseBroker):
                     status="rejected",
                     filled_qty=0,
                     filled_price=0,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                     message=(
                         f"Insufficient funds: need ${total_cost:.2f}, "
                         f"have ${self._cash:.2f}"
@@ -155,7 +155,7 @@ class PaperTrader(BaseBroker):
             status="filled",
             filled_qty=order.quantity,
             filled_price=fill_price,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message=f"Paper {order.side} {order.quantity} {order.ticker} @ ${fill_price}",
         )
         self._orders[order_id] = result
@@ -168,7 +168,7 @@ class PaperTrader(BaseBroker):
             "quantity": order.quantity,
             "price": fill_price,
             "total": total_cost,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         })
 
         log.info(
@@ -199,7 +199,7 @@ class PaperTrader(BaseBroker):
             status="unknown",
             filled_qty=0,
             filled_price=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="Order not found",
         )
 

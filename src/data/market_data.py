@@ -3,14 +3,35 @@ Market data service — streams real-time quotes, pulls historical bars,
 and fetches options chains from Alpaca's API.
 """
 
+import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import httpx
 from config import settings
 from src.utils.logger import get_logger
 
 log = get_logger("market_data")
+
+_OCC_RE = re.compile(r"^[A-Z]{1,6}(\d{6})([CP])(\d{8})$")
+
+
+def _parse_occ_symbol(symbol: str) -> tuple[float, str, str]:
+    """
+    Parse an OCC option symbol and return (strike, expiry, option_type).
+
+    OCC format: {UNDERLYING}{YYMMDD}{C|P}{STRIKE*1000 padded to 8 digits}
+    Example: AAPL240119C00150000 → (150.0, "2024-01-19", "call")
+    Returns (0, "", "") if the symbol doesn't match the expected format.
+    """
+    m = _OCC_RE.match(symbol)
+    if not m:
+        return 0.0, "", ""
+    date_raw = m.group(1)
+    expiry = f"20{date_raw[:2]}-{date_raw[2:4]}-{date_raw[4:6]}"
+    option_type = "call" if m.group(2) == "C" else "put"
+    strike = int(m.group(3)) / 1000.0
+    return strike, expiry, option_type
 
 
 @dataclass
@@ -66,7 +87,8 @@ class MarketDataService:
             "APCA-API-SECRET-KEY": settings.ALPACA_SECRET_KEY,
         }
         self._client = httpx.AsyncClient(
-            headers=self._headers, timeout=10.0
+            headers=self._headers,
+            timeout=httpx.Timeout(10.0, read=30.0),
         )
         self._price_cache: dict[str, list[PriceBar]] = {}
         self._quote_cache: dict[str, Quote] = {}
@@ -76,17 +98,20 @@ class MarketDataService:
         """Fetch the latest quote for a ticker."""
         try:
             resp = await self._client.get(
-                f"{self._base_url}/v2/stocks/{ticker}/quotes/latest"
+                f"{self._base_url}/v2/stocks/{ticker}/quotes/latest",
+                params={"feed": settings.ALPACA_DATA_FEED},
             )
             resp.raise_for_status()
             data = resp.json().get("quote", {})
+            ask = data.get("ap", 0) or 0
+            bid = data.get("bp", 0) or 0
             quote = Quote(
                 ticker=ticker,
-                price=(data.get("ap", 0) + data.get("bp", 0)) / 2,
-                bid=data.get("bp", 0),
-                ask=data.get("ap", 0),
+                price=(ask + bid) / 2 if (ask + bid) > 0 else 0,
+                bid=bid,
+                ask=ask,
                 volume=data.get("as", 0) + data.get("bs", 0),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             self._quote_cache[ticker] = quote
             return quote
@@ -102,23 +127,24 @@ class MarketDataService:
     ) -> list[PriceBar]:
         """Fetch historical OHLCV bars."""
         try:
-            end = datetime.utcnow()
-            start = end - timedelta(days=limit * 2)  # buffer for weekends
+            now = datetime.now(timezone.utc)
+            start = now - timedelta(days=limit * 2)  # buffer for weekends/holidays
             resp = await self._client.get(
                 f"{self._base_url}/v2/stocks/{ticker}/bars",
                 params={
                     "timeframe": timeframe,
                     "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "end": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "limit": limit,
-                    "feed": "iex",
+                    "feed": settings.ALPACA_DATA_FEED,
+                    "sort": "asc",
                 },
             )
             resp.raise_for_status()
             bars_data = resp.json().get("bars", [])
             bars = [
                 PriceBar(
-                    timestamp=datetime.fromisoformat(b["t"].replace("Z", "")),
+                    timestamp=datetime.fromisoformat(b["t"].replace("Z", "+00:00")).replace(tzinfo=None),
                     open=b["o"],
                     high=b["h"],
                     low=b["l"],
@@ -141,11 +167,7 @@ class MarketDataService:
     ) -> list[OptionContract]:
         """Fetch the options chain for a ticker."""
         try:
-            params = {
-                "underlying_symbols": ticker,
-                "feed": "indicative",
-                "limit": 100,
-            }
+            params: dict = {"limit": 100}
             if expiration_gte:
                 params["expiration_date_gte"] = expiration_gte
 
@@ -158,25 +180,35 @@ class MarketDataService:
 
             contracts = []
             for symbol, snap in snapshots.items():
+                # Strike, expiry, and type must be parsed from the OCC symbol.
+                # Alpaca's snapshot body does not include them as fields.
+                # OCC format: UNDERLYING YYMMDD C/P STRIKE*1000 (8 digits)
+                # Example: AAPL240119C00150000 → call, $150.00, 2024-01-19
+                strike, expiry, option_type = _parse_occ_symbol(symbol)
+                if strike == 0:
+                    continue
+
                 greeks = snap.get("greeks", {})
                 latest = snap.get("latestQuote", {})
                 trade = snap.get("latestTrade", {})
+
                 contracts.append(OptionContract(
                     ticker=ticker,
                     contract_symbol=symbol,
-                    strike=snap.get("strikePrice", 0),
-                    expiration=snap.get("expirationDate", ""),
-                    option_type=snap.get("type", "call"),
-                    bid=latest.get("bp", 0),
-                    ask=latest.get("ap", 0),
-                    last_price=trade.get("p", 0),
-                    volume=trade.get("s", 0),
-                    open_interest=snap.get("openInterest", 0),
-                    implied_volatility=greeks.get("impliedVolatility", 0),
-                    delta=greeks.get("delta", 0),
-                    gamma=greeks.get("gamma", 0),
-                    theta=greeks.get("theta", 0),
-                    vega=greeks.get("vega", 0),
+                    strike=strike,
+                    expiration=expiry,
+                    option_type=option_type,
+                    bid=latest.get("bp", 0) or 0,
+                    ask=latest.get("ap", 0) or 0,
+                    last_price=trade.get("p", 0) or 0,
+                    volume=trade.get("s", 0) or 0,
+                    open_interest=snap.get("openInterest", 0) or 0,
+                    # impliedVolatility is a top-level field, not inside greeks
+                    implied_volatility=snap.get("impliedVolatility", 0) or 0,
+                    delta=greeks.get("delta", 0) or 0,
+                    gamma=greeks.get("gamma", 0) or 0,
+                    theta=greeks.get("theta", 0) or 0,
+                    vega=greeks.get("vega", 0) or 0,
                 ))
             log.info(
                 f"Fetched {len(contracts)} option contracts for {ticker}"

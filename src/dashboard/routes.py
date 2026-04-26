@@ -6,7 +6,7 @@ signals, approving trades, and adjusting settings.
 import asyncio
 import os
 import signal as signal_mod
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -98,7 +98,7 @@ def register_routes(app: FastAPI):
         current_pnl = (goal.realized_pnl + goal.unrealized_pnl) if goal else 0.0
 
         return {
-            "timestamp":    datetime.utcnow().isoformat(),
+            "timestamp":    datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "mode":         settings.TRADING_MODE,
             "trading_mode": goal.mode.value if goal else "inactive",
 

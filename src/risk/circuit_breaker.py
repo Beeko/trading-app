@@ -5,7 +5,7 @@ safety rail in the system and cannot be overridden while running.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from config import settings
 from src.utils.logger import get_logger
@@ -133,7 +133,7 @@ class CircuitBreaker:
     def _trip(self, reason: str):
         """Trip the circuit breaker — halts all trading."""
         self._state.is_tripped = True
-        self._state.tripped_at = datetime.utcnow()
+        self._state.tripped_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self._state.reason = reason
         self._state.loss_at_trip = self._cumulative_pnl
 

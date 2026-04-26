@@ -109,6 +109,13 @@ class TradingApp:
         # Start daily goal
         self.goal_engine.start_day(account.balance)
 
+        # Seed default watchlist so stocks are visible immediately
+        for ticker in settings.DEFAULT_WATCHLIST:
+            self.scanner.add_to_watchlist(ticker)
+        log.info(
+            f"Watchlist seeded: {', '.join(settings.DEFAULT_WATCHLIST)}"
+        )
+
         # Inject services into dashboard
         set_services({
             "goal_engine":     self.goal_engine,

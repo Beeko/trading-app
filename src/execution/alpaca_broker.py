@@ -4,7 +4,7 @@ live or paper trading. Implements the BaseBroker interface.
 """
 
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from src.execution.broker import (
     BaseBroker, OrderRequest, OrderResult, Position, AccountInfo,
@@ -108,7 +108,7 @@ class AlpacaBroker(BaseBroker):
                 status=o.get("status", "pending"),
                 filled_qty=int(o.get("filled_qty") or 0),
                 filled_price=float(o.get("filled_avg_price") or 0),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"Order placed: {order.side} {order.quantity} {order.ticker}",
             )
             log.info(
@@ -132,7 +132,7 @@ class AlpacaBroker(BaseBroker):
                 status="rejected",
                 filled_qty=0,
                 filled_price=0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=msg,
             )
 
@@ -159,7 +159,7 @@ class AlpacaBroker(BaseBroker):
             status=o.get("status", "unknown"),
             filled_qty=int(o.get("filled_qty") or 0),
             filled_price=float(o.get("filled_avg_price") or 0),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message=o.get("status", ""),
         )
 
@@ -176,7 +176,7 @@ class AlpacaBroker(BaseBroker):
                 status="filled",
                 filled_qty=int(o.get("qty", 0)),
                 filled_price=float(o.get("filled_avg_price", 0)),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"Position closed: {ticker}",
             )
         except Exception as e:
@@ -189,8 +189,21 @@ class AlpacaBroker(BaseBroker):
                 f"{self._base_url}/v2/positions"
             )
             resp.raise_for_status()
-            log.info("All positions closed")
-            return []
+            results = []
+            # Alpaca returns [{symbol, status, body: {order}}] per position
+            for item in resp.json():
+                body = item.get("body", {})
+                if item.get("status") == 200 and body:
+                    results.append(OrderResult(
+                        order_id=body.get("id", ""),
+                        status=body.get("status", "pending"),
+                        filled_qty=int(body.get("filled_qty") or 0),
+                        filled_price=float(body.get("filled_avg_price") or 0),
+                        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                        message=f"Closed position in {item.get('symbol', '')}",
+                    ))
+            log.info(f"All positions closed: {len(results)} orders submitted")
+            return results
         except Exception as e:
             log.error(f"Failed to close all positions: {e}")
             return []

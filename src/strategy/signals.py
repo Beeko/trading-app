@@ -5,7 +5,7 @@ Only fires when multiple sources agree.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from src.analysis.indicators import IndicatorSnapshot, Direction
 from src.analysis.sentiment import SentimentResult
@@ -173,7 +173,7 @@ class SignalEngine:
             }
 
         signal = TradeSignal(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             ticker=ticker,
             direction=direction,
             asset_type="stock",
