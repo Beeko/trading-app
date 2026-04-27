@@ -3,7 +3,7 @@ services:
     build: .
     container_name: trading-app
     ports:
-      - "3000:3000"
+      - "6969:6969"
     env_file:
       - .env
     volumes:
